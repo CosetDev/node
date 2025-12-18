@@ -1,9 +1,25 @@
 import jwt from "jsonwebtoken";
+import { paymentMiddleware, Network } from "x402-express";
 import type { NextFunction, Request, Response } from "express";
 
 import UserDB from "../models/Users";
 import { getKey } from "../lib/utils";
 
+// Oracle payment middleware
+export async function dynamic402(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const { oracleAddress } = req.params;
+
+    const oracle = await db.oracles.findById(oracleAddress);
+    if (!oracle) return res.status(404).json({ error: "Oracle not found" });
+
+    return paymentMiddleware({
+        amount: oracle.price,
+        asset: "USDC",
+        recipient: process.env.WALLET_PRIVATE_KEY!,
+    })(req, res, next);
+}
+
+// Authentication middlewares
 /**
  * Server-to-server token verification middleware
  */
