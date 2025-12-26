@@ -1,3 +1,5 @@
+# Coset Relayer Node
+
 ## How to create keyfile for server-only auth?
 Run these commands in order:
 

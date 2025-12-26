@@ -1,89 +1,91 @@
-import jwt from "jsonwebtoken";
-import { paymentMiddleware, Network } from "x402-express";
+import { Contract, ContractRunner, JsonRpcProvider } from "ethers";
+import { Oracle__factory } from "@coset-dev/contracts";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
 import type { NextFunction, Request, Response } from "express";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 
-import UserDB from "../models/Users";
-import { getKey } from "../lib/utils";
+import { networks } from "../lib/networks";
+
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+const facilitatorUrl = process.env.FACILITATOR_URL!;
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
 
 // Oracle payment middleware
 export async function dynamic402(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const { oracleAddress } = req.params;
+    req.oracle = req.oracle!; // From previous middleware
 
-    const oracle = await db.oracles.findById(oracleAddress);
-    if (!oracle) return res.status(404).json({ error: "Oracle not found" });
+    const tokenDecimal = req.oracle.network.nativeCurrency.decimals;
+    const network = `eip155:${req.oracle.network.id}` as `${string}:${string}`;
 
-    return paymentMiddleware({
-        amount: oracle.price,
-        asset: "USDC",
-        recipient: process.env.WALLET_PRIVATE_KEY!,
-    })(req, res, next);
+    next(
+        paymentMiddleware(
+            {
+                "POST /update/:oracleAddress": {
+                    accepts: [
+                        {
+                            scheme: "exact",
+                            price: `$${(req.oracle.updatePrice / tokenDecimal).toFixed(tokenDecimal)}`,
+                            network,
+                            payTo: evmAddress,
+                        },
+                    ],
+                    description: `${req.oracle.address} data update`,
+                    mimeType: "application/json",
+                },
+            },
+            // TODO: Custom token
+            new x402ResourceServer(facilitatorClient).register(network, new ExactEvmScheme()),
+        ),
+    );
 }
 
-// Authentication middlewares
-/**
- * Server-to-server token verification middleware
- */
-export const verifyServerToken = (req: Request, res: Response, next: NextFunction): void => {
-    const authHeader = req.headers.authorization;
+export async function oracleDetails(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> {
+    const { oracleAddress } = req.params;
+    const { network, sender } = req.body;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        res.status(401).json({ error: "Missing or invalid token" });
+    if (!oracleAddress || !network) {
+        res.status(400).json({ error: "Missing details in request" });
         return;
     }
 
-    const token = authHeader.split(" ")[1];
-
-    jwt.verify(
-        token,
-        getKey(),
-        {
-            algorithms: ["ES256"],
-            issuer: process.env.JWT_ISSUER!,
-        },
-        err => {
-            if (err) {
-                return res.status(403).json({ error: "Invalid or expired token" });
-            }
-            next();
-        },
-    );
-};
-
-/**
- * User token verification middleware
- * Used to identify the user making the request
- */
-export const userToken = (req: Request, res: Response, next: NextFunction): void => {
-    // Get user cookie
-    const rawJWT = req.cookies.auth;
-
-    if (rawJWT) {
-        jwt.verify(rawJWT, process.env.JWT_SECRET!, async (err: any, decoded: any) => {
-            if (err) {
-                res.status(403).json({ error: "Invalid or expired token" });
-                return;
-            }
-
-            if (!decoded) return next();
-
-            // Get user object
-            const user = await UserDB.findOne({ username: decoded.username });
-            if (!user) {
-                res.status(404).json({ error: "User not found" });
-                return;
-            }
-
-            // Attach decoded user data to request object for use in route handlers
-            req.user = user;
-            next();
-        });
-    } else next();
-};
-
-export const authRequired = (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-        res.status(401).json({ error: "Unauthorized" });
+    if (!Object.keys(networks).includes(network)) {
+        res.status(400).json({ error: "Invalid network" });
         return;
     }
-    next();
-};
+
+    if (!sender) {
+        res.status(400).json({ error: "Missing sender address" });
+        return;
+    }
+
+    try {
+        /* const oracle = new Contract(
+            oracleAddress,
+            Oracle__factory.abi,
+            networks[network as keyof typeof networks].provider,
+        ); */
+        const oracle = Oracle__factory.connect(
+            oracleAddress,
+            networks[network as keyof typeof networks].provider as any,
+        );
+
+        const updatePrice = await oracle.dataUpdatePrice();
+
+        req.oracle = {
+            address: oracleAddress,
+            network: networks[network as keyof typeof networks],
+            updatePrice: Number(updatePrice),
+            contract: oracle,
+            updateCaller: sender,
+        };
+
+        next();
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch oracle details" });
+    }
+}
