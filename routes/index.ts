@@ -3,8 +3,9 @@ import { Router } from "express";
 import Keys from "../models/Keys";
 import Oracle from "../models/Oracles";
 
+import { adminWallet } from "../lib/config";
 import { dynamic402, oracleDetails } from "./middleware";
-import { refundPercentage, adminWallet } from "../lib/config";
+import { toUtf8Bytes } from "ethers";
 
 const router = Router();
 
@@ -14,9 +15,11 @@ router.get("/health", (req, res) => {
 });
 
 const refund = async (to: string, amount: number) => {
+    const gas = await adminWallet.estimateGas({ to, value: BigInt(amount) });
     const tx = await adminWallet.sendTransaction({
         to,
-        value: BigInt(Math.floor(amount * refundPercentage)),
+        gasLimit: gas,
+        value: BigInt(amount) - gas,
     });
     await tx.wait();
 };
@@ -44,13 +47,15 @@ router.post("/update/:oracleAddress", oracleDetails, dynamic402, async (req, res
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${providerApiKey}`,
+                Authorization: `Bearer ${providerApiKey}`,
             },
         });
         var receivedData = await webhookRes.json();
 
         if (!receivedData) {
             refund(updateCaller, updatePrice); // Refund on failure
+            res.status(400).json({ error: "Invalid data received from webhook." });
+            return;
         }
     } catch (err) {
         console.error("Error processing oracle update:", err);
@@ -59,10 +64,19 @@ router.post("/update/:oracleAddress", oracleDetails, dynamic402, async (req, res
         return;
     }
 
-    // Handle provider fee share
-    contract.sendProviderFee();
+    // TODO: Write data to oracle contract
 
-    res.status(200).json({ data: receivedData });
+    contract.updateData(toUtf8Bytes(JSON.stringify(receivedData))).then((tx: any) => {
+        tx.wait()
+            .then(() => {
+                res.status(200).json({ data: receivedData });
+            })
+            .catch((err: any) => {
+                console.error("Error waiting for transaction:", err);
+                // TODO: Refund the caller with extra gas fee
+                res.status(500).json({ error: "Transaction failed during oracle update." });
+            });
+    });
 });
 
 export default router;

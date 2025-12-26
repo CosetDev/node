@@ -64,11 +64,6 @@ export async function oracleDetails(
     }
 
     try {
-        /* const oracle = new Contract(
-            oracleAddress,
-            Oracle__factory.abi,
-            networks[network as keyof typeof networks].provider,
-        ); */
         const oracle = Oracle__factory.connect(
             oracleAddress,
             networks[network as keyof typeof networks].provider as any,
