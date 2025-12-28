@@ -1,3 +1,4 @@
+import { HexAddress, NetworkKeys } from "../lib/types";
 import mongoose, { Schema, type Model, type Document, Types } from "mongoose";
 
 export interface IOracle {
@@ -11,12 +12,12 @@ export interface IOracle {
         protocol: "https" | "wss";
         url: string;
     };
-    owner: string;
-    network?: string;
-    address?: string;
+    provider: HexAddress;
+    network: NetworkKeys;
+    address: HexAddress;
     requestPrice: number;
     recommendedUpdateDuration?: number;
-    deploymentTx?: string;
+    deploymentTx?: HexAddress;
 }
 
 export interface IOracleDocument extends IOracle, Document {
@@ -36,9 +37,9 @@ const OracleSchema = new Schema<IOracleDocument>(
             protocol: { type: String, enum: ["https", "wss"], required: true },
             url: { type: String, required: true },
         },
-        owner: { type: String, required: true },
-        network: { type: String },
-        address: { type: String },
+        provider: { type: String, required: true },
+        network: { type: String, required: true },
+        address: { type: String, required: true, unique: true },
         requestPrice: { type: Number, required: true },
         recommendedUpdateDuration: { type: Number },
         deploymentTx: { type: String },

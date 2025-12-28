@@ -1,82 +1,113 @@
-import { Router } from "express";
+import { Router, Request } from "express";
 
 import Keys from "../models/Keys";
 import Oracle from "../models/Oracles";
 
-import { adminWallet } from "../lib/config";
-import { dynamic402, oracleDetails } from "./middleware";
 import { toUtf8Bytes } from "ethers";
+import facilitator from "./facilitator";
+import { dynamic402, oracleDetails } from "./middleware";
+import { RequestBody, RequestParams } from "../lib/types";
+import { getAdminWallet, prepareSignature, refundUsdc } from "../lib/utils";
 
 const router = Router();
+
+router.use("/facilitator", facilitator);
 
 // Health check route
 router.get("/health", (req, res) => {
     res.status(200).json({ status: "OK" });
 });
 
-const refund = async (to: string, amount: number) => {
-    const gas = await adminWallet.estimateGas({ to, value: BigInt(amount) });
-    const tx = await adminWallet.sendTransaction({
-        to,
-        gasLimit: gas,
-        value: BigInt(amount) - gas,
-    });
-    await tx.wait();
-};
-
 // Oracle update route
-router.post("/update/:oracleAddress", oracleDetails, dynamic402, async (req, res) => {
-    const { contract, address, updatePrice, updateCaller } = req.body.oracle;
+router.post(
+    "/update/:oracleAddress",
+    oracleDetails,
+    dynamic402,
+    async (req: Request<RequestParams, any, RequestBody>, res) => {
+        const { sender } = req.body;
+        const { factory, address, network, providerAmount, totalCost } = req.body.oracle;
 
-    // Get oracle record from DB
-    const oracleRecord = await Oracle.findOne({ address });
-    if (!oracleRecord) {
-        res.status(404).json({ error: "Oracle not found. Invalid address is received." });
-        return;
-    }
-
-    const providerApiKey = (await Keys.findOne({ wallet: oracleRecord.owner }))?.apiKey;
-    if (!providerApiKey) {
-        res.status(400).json({ error: "An unexpected error occured. Please contact support." });
-        return;
-    }
-
-    // Call webhook to get updated data
-    try {
-        const webhookRes = await fetch(`https://${oracleRecord.api.url}`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${providerApiKey}`,
-            },
-        });
-        var receivedData = await webhookRes.json();
-
-        if (!receivedData) {
-            refund(updateCaller, updatePrice); // Refund on failure
-            res.status(400).json({ error: "Invalid data received from webhook." });
+        // Get oracle record from DB
+        const oracleRecord = await Oracle.findOne({ address });
+        if (!oracleRecord) {
+            res.status(404).json({ error: "Oracle not found. Invalid address is received." });
             return;
         }
-    } catch (err) {
-        console.error("Error processing oracle update:", err);
-        await refund(updateCaller, updatePrice); // Refund on failure
-        res.status(500).json({ error: "Internal server error during oracle update." });
-        return;
-    }
 
-    // TODO: Write data to oracle contract
+        const providerApiKey = (await Keys.findOne({ wallet: oracleRecord.provider }))?.apiKey;
+        if (!providerApiKey) {
+            res.status(400).json({ error: "Provider API key not found." });
+            return;
+        }
 
-    contract.updateData(toUtf8Bytes(JSON.stringify(receivedData))).then((tx: any) => {
-        tx.wait()
-            .then(() => {
-                res.status(200).json({ data: receivedData });
+        const responseWithRefund = async (statusCode: number, errorMsg: string, err?: any) => {
+            const receipt = await refundUsdc(network, sender, totalCost);
+            res.status(statusCode).json({ error: errorMsg, refundTransactionHash: receipt?.hash });
+            if (err) {
+                console.error(err);
+            }
+        };
+
+        // Call webhook to get updated data
+        try {
+            const webhookRes = await fetch(`https://${oracleRecord.api.url}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${providerApiKey}`,
+                },
+            });
+            var receivedData = await webhookRes.json();
+
+            if (!receivedData) {
+                responseWithRefund(400, "Invalid data received from webhook.");
+                return;
+            }
+        } catch (err) {
+            responseWithRefund(500, "Internal server error during oracle update.", err);
+            return;
+        }
+
+        const adminWallet = getAdminWallet(network.provider);
+        const dataBytes = toUtf8Bytes(JSON.stringify(receivedData));
+
+        const { validAfter, validBefore, nonce, sig } = await prepareSignature(
+            network,
+            adminWallet,
+            adminWallet.address,
+            oracleRecord.provider,
+            providerAmount,
+        );
+
+        factory
+            .connect(adminWallet as any)
+            .updateOracleData(
+                address,
+                dataBytes,
+                validAfter,
+                validBefore,
+                nonce,
+                sig.v,
+                sig.r,
+                sig.s,
+            )
+            .then(tx => {
+                tx.wait()
+                    .then(receipt => {
+                        res.status(200).json({
+                            data: receivedData,
+                            transactionHash: receipt?.hash,
+                        });
+                    })
+                    .catch((err: any) => {
+                        refundUsdc(network, sender, totalCost);
+                        responseWithRefund(500, "Error during transaction confirmation.", err);
+                    });
             })
             .catch((err: any) => {
-                console.error("Error waiting for transaction:", err);
-                // TODO: Refund the caller with extra gas fee
-                res.status(500).json({ error: "Transaction failed during oracle update." });
+                responseWithRefund(500, "Error during transaction submission.", err);
             });
-    });
-});
+    },
+);
 
 export default router;

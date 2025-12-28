@@ -1,55 +1,59 @@
+import { Network } from "./types";
 import { JsonRpcProvider } from "ethers";
+import { mantle, mantleSepoliaTestnet as mantleTestnet } from "viem/chains";
 
-const rpc = {
-    "mantle-testnet": "https://rpc.sepolia.mantle.xyz",
-    mantle: "https://rpc.mantle.xyz",
-    "movement-testnet": "https://testnet.movementnetwork.xyz/v1",
-    movement: "https://mainnet.movementnetwork.xyz/v1",
-}
+const getFacilitatorUrl = (networkId: number): string => {
+    return "http://localhost:" + (process.env.SERVER_PORT || "5001") + "/facilitator/" + networkId;
+};
 
-export const networks = {
+export const baseNetworks = {
     "mantle-testnet": {
         id: 5003,
-        rpc: rpc["mantle-testnet"],
-        facilitator: "",
-        nativeCurrency: {
-            decimals: 18,
-            name: "MNT",
-            symbol: "MNT",
+        testnet: true,
+        rpc: "https://rpc.sepolia.mantle.xyz",
+        currency: {
+            decimals: 6,
+            name: "Testnet USDC",
+            symbol: "TUSDC",
+            version: "2",
+            address: "0x05856b07544044873616d390Cc50c785fe8a8885",
         },
-        provider: new JsonRpcProvider(rpc["mantle-testnet"]),
     },
     mantle: {
         id: 5000,
-        rpc: rpc.mantle,
-        facilitator: "",
-        nativeCurrency: {
-            decimals: 18,
-            name: "MNT",
-            symbol: "MNT",
+        testnet: false,
+        rpc: "https://rpc.mantle.xyz",
+        currency: {
+            decimals: 6,
+            name: "USD Coin",
+            symbol: "USDC",
+            version: "2",
+            address: "0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9",
         },
-        provider: new JsonRpcProvider(rpc.mantle),
     },
-    "movement-testnet": {
-        id: 250,
-        rpc: rpc["movement-testnet"],
-        faciliator: "https://facilitator.stableyard.fi",
-        nativeCurrency: {
-            decimals: 18,
-            name: "MOVE",
-            symbol: "MOVE",
+};
+
+export const networks = Object.fromEntries(
+    Object.entries(baseNetworks).map(([key, net]) => [
+        key,
+        {
+            ...net,
+            eip155: `eip155:${net.id}`,
+            facilitator: getFacilitatorUrl(net.id),
+            provider: new JsonRpcProvider(net.rpc),
         },
-        provider: new JsonRpcProvider(rpc["movement-testnet"]),
-    },
-    movement: {
-        id: 126,
-        rpc: rpc.movement,
-        faciliator: "https://facilitator.stableyard.fi",
-        nativeCurrency: {
-            decimals: 18,
-            name: "MOVE",
-            symbol: "MOVE",
-        },
-        provider: new JsonRpcProvider(rpc.movement),
-    },
+    ]),
+) as Record<string, Network>;
+
+export const networkIds = Object.values(networks).map(network => network.id);
+
+export const eip155Ids = Object.fromEntries(
+    Object.entries(networks).map(([key, value]) => [value.id, value.eip155]),
+) as Record<string, `eip155:${number}`>;
+
+export const viemChains = { mantle, mantleTestnet };
+
+export const viemChainMap = {
+    [mantle.id]: mantle,
+    [mantleTestnet.id]: mantleTestnet,
 };
