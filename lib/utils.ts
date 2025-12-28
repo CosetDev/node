@@ -184,17 +184,3 @@ export const calculateUpdateOracleDataGas = async (
     const gasCostUSDUnits = parseUnits(gasCostUSD.toString(), 6);
     return { providerAmount, gasCostMNT, gasCostUSD, gasCostUSDUnits };
 };
-
-export const refundUsdc = async (network: Network, to: string, amount: bigint) => {
-    try {
-        const adminWallet = getAdminWallet(network.provider);
-        const token = IERC20Extended__factory.connect(
-            network.currency.address,
-            network.provider as any,
-        );
-        const tx = await token.connect(adminWallet as any).transfer(to, amount);
-        return await tx.wait();
-    } catch (error) {
-        console.error("Error during refund:", error);
-    }
-};

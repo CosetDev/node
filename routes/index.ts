@@ -7,7 +7,7 @@ import { toUtf8Bytes } from "ethers";
 import facilitator from "./facilitator";
 import { dynamic402, oracleDetails } from "./middleware";
 import { RequestBody, RequestParams } from "../lib/types";
-import { getAdminWallet, prepareSignature, refundUsdc } from "../lib/utils";
+import { getAdminWallet, prepareSignature } from "../lib/utils";
 
 const router = Router();
 
@@ -24,8 +24,7 @@ router.post(
     oracleDetails,
     dynamic402,
     async (req: Request<RequestParams, any, RequestBody>, res) => {
-        const { sender } = req.body;
-        const { factory, address, network, providerAmount, totalCost } = req.body.oracle;
+        const { factory, address, network, providerAmount } = req.body.oracle;
 
         // Get oracle record from DB
         const oracleRecord = await Oracle.findOne({ address });
@@ -40,9 +39,8 @@ router.post(
             return;
         }
 
-        const responseWithRefund = async (statusCode: number, errorMsg: string, err?: any) => {
-            const receipt = await refundUsdc(network, sender, totalCost);
-            res.status(statusCode).json({ error: errorMsg, refundTransactionHash: receipt?.hash });
+        const responseWithLog = async (statusCode: number, errorMsg: string, err?: any) => {
+            res.status(statusCode).json({ error: errorMsg });
             if (err) {
                 console.error(err);
             }
@@ -60,11 +58,11 @@ router.post(
             var receivedData = await webhookRes.json();
 
             if (!receivedData) {
-                responseWithRefund(400, "Invalid data received from webhook.");
+                responseWithLog(400, "Invalid data received from webhook.");
                 return;
             }
         } catch (err) {
-            responseWithRefund(500, "Internal server error during oracle update.", err);
+            responseWithLog(500, "Internal server error during oracle update.", err);
             return;
         }
 
@@ -100,12 +98,11 @@ router.post(
                         });
                     })
                     .catch((err: any) => {
-                        refundUsdc(network, sender, totalCost);
-                        responseWithRefund(500, "Error during transaction confirmation.", err);
+                        responseWithLog(500, "Error during transaction confirmation.", err);
                     });
             })
             .catch((err: any) => {
-                responseWithRefund(500, "Error during transaction submission.", err);
+                responseWithLog(500, "Error during transaction submission.", err);
             });
     },
 );
