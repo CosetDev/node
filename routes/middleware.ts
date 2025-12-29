@@ -98,13 +98,6 @@ export async function oracleDetails(
             oracle.getDataWithoutCheck(),
         ]);
 
-        console.log("Fetched oracle details:", {
-            factory: factory,
-            oracleProvider,
-            updatePrice: updatePrice.toString(),
-            currentData,
-        });
-
         const { providerAmount, gasCostMNT, gasCostUSD, gasCostUSDUnits } =
             await calculateUpdateOracleDataGas(
                 factory,
