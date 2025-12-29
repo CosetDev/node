@@ -5,3 +5,5 @@ dist
 .env
 .env.test
 test*.ts
+
+logs

@@ -7,6 +7,7 @@ export type HexAddress = `0x${string}`;
 export type Network = {
     id: number;
     rpc: string;
+    native: string;
     currency: {
         decimals: number;
         name: string;
@@ -27,14 +28,12 @@ export type Networks = Record<NetworkKeys, Network>;
 export type ViemChainMapId = keyof typeof viemChainMap;
 
 export interface RequestParams {
-    oracleAddress: HexAddress;
     [key: string]: string;
 }
 
 export interface RequestBody {
-    network: NetworkKeys;
-    sender: HexAddress;
-    data: Record<string, any>;
+    networkName: NetworkKeys;
+    oracleAddress: HexAddress;
     oracle: {
         totalCost: bigint;
         address: HexAddress;
@@ -42,7 +41,6 @@ export interface RequestBody {
         provider: HexAddress;
         providerAmount: bigint;
         factory: OracleFactory;
-        updateCaller: HexAddress;
         network: Networks[NetworkKeys];
         methodGasFee: {
             usdc: number;

@@ -6,10 +6,11 @@ import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
 import express, { type Application } from "express";
 
-import publicRoutes from "./routes";
-
+import update from "./routes/update";
 import { socketServer } from "./socket";
+import facilitator from "./routes/facilitator";
 import { SocketListeners } from "./socket/listeners";
+import logger from "./lib/logger";
 
 const app: Application = express();
 const server = require("http").createServer(app);
@@ -21,7 +22,11 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use("/", publicRoutes);
+app.use("/update", update);
+app.use("/facilitator", facilitator);
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "OK" });
+});
 
 // Socket.io
 const io = socketServer(server);

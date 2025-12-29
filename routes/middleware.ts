@@ -5,7 +5,8 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { type NextFunction, type Request, type Response } from "express";
 import { Oracle__factory, OracleFactory__factory } from "@coset-dev/contracts";
 
-import { networks } from "../lib/networks";
+import logger from "../lib/logger";
+import { networkNames, networks } from "../lib/networks";
 import { HexAddress, RequestBody, RequestParams } from "../lib/types";
 import { calculateUpdateOracleDataGas, getAdminWallet } from "../lib/utils";
 
@@ -27,35 +28,30 @@ export function dynamic402(
 
     const middleware = paymentMiddleware(
         {
-            ["POST /update/" + oracleAddress]: {
-                accepts: {
-                    scheme: "exact",
-                    price: {
-                        amount: totalCost.toString(),
-                        asset: currency.address,
-                        extra: {
-                            name: currency.name,
-                            decimals: currency.decimals,
-                            version: currency.version || "1",
-                            priceDetails: {
-                                methodGasFee: req.body.oracle.methodGasFee,
-                                totalCost: formatUnits(
-                                    req.body.oracle.totalCost,
-                                    currency.decimals,
-                                ),
-                                updatePrice: formatUnits(
-                                    req.body.oracle.updatePrice,
-                                    currency.decimals,
-                                ),
-                            },
+            accepts: {
+                scheme: "exact",
+                price: {
+                    amount: totalCost.toString(),
+                    asset: currency.address,
+                    extra: {
+                        name: currency.name,
+                        decimals: currency.decimals,
+                        version: currency.version || "1",
+                        priceDetails: {
+                            methodGasFee: req.body.oracle.methodGasFee,
+                            totalCost: formatUnits(req.body.oracle.totalCost, currency.decimals),
+                            updatePrice: formatUnits(
+                                req.body.oracle.updatePrice,
+                                currency.decimals,
+                            ),
                         },
                     },
-                    network,
-                    payTo: adminWallet.address,
                 },
-                description: `${oracleAddress} oracle data update`,
-                mimeType: "application/json",
+                network,
+                payTo: adminWallet.address,
             },
+            description: `${oracleAddress} oracle data update`,
+            mimeType: "application/json",
         },
         new x402ResourceServer(facilitatorClient).register(network, new ExactEvmScheme()),
     );
@@ -68,26 +64,20 @@ export async function oracleDetails(
     res: Response,
     next: NextFunction,
 ): Promise<void> {
-    const { oracleAddress } = req.params;
-    const { network, sender } = req.body;
+    const { networkName, oracleAddress } = req.body;
 
-    if (!oracleAddress || !network) {
+    if (!oracleAddress || !networkName) {
         res.status(400).json({ error: "Missing details in request" });
         return;
     }
 
-    if (!Object.keys(networks).includes(network)) {
-        res.status(400).json({ error: "Invalid network" });
+    if (!networkNames.includes(networkName)) {
+        res.status(400).json({ error: "Invalid network: " + networkName });
         return;
     }
 
-    if (!sender) {
-        res.status(400).json({ error: "Missing sender address" });
-        return;
-    }
-
-    const networkObj = networks[network];
-    const rpcProvider = networkObj.provider;
+    const network = networks[networkName];
+    const rpcProvider = network.provider;
 
     try {
         const oracle = Oracle__factory.connect(oracleAddress, rpcProvider as any);
@@ -98,36 +88,35 @@ export async function oracleDetails(
             oracle.getDataWithoutCheck(),
         ]);
 
-        const { providerAmount, gasCostMNT, gasCostUSD, gasCostUSDUnits } =
+        const { providerAmount, gasCostNative, gasCostUSDC, gasCostUSDCUnits } =
             await calculateUpdateOracleDataGas(
                 factory,
-                networkObj,
+                network,
                 updatePrice,
                 oracleProvider,
                 oracleAddress,
                 currentData,
             );
 
-        const totalCost = updatePrice + gasCostUSDUnits;
+        const totalCost = updatePrice + gasCostUSDCUnits;
 
         req.body.oracle = {
             factory,
+            network,
             totalCost,
             providerAmount,
-            network: networkObj,
-            updateCaller: sender,
             address: oracleAddress,
             methodGasFee: {
-                usdc: Number(gasCostUSD),
-                native: Number(gasCostMNT),
+                usdc: Number(gasCostUSDC),
+                native: Number(gasCostNative),
             },
             updatePrice: Number(updatePrice),
             provider: oracleProvider as HexAddress,
         };
 
         next();
-    } catch (error) {
-        console.error("Error fetching oracle details:", error);
+    } catch (error: any) {
+        logger.error("Error fetching oracle details:", error);
         res.status(500).json({ error: "Failed to fetch oracle details" });
     }
 }

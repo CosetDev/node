@@ -5,6 +5,7 @@ import { readFileSync } from "fs";
 import { CoinGeckoClient } from "coingecko-api-v3";
 import { ethers, parseUnits, Signer, JsonRpcProvider, Wallet } from "ethers";
 import { IERC20Extended__factory, OracleFactory } from "@coset-dev/contracts";
+import { networks } from "./networks";
 
 export const getAdminWallet = (provider: JsonRpcProvider): Wallet => {
     return new Wallet(process.env.WALLET_PRIVATE_KEY!, provider);
@@ -15,64 +16,80 @@ export const geckoClient = new CoinGeckoClient({
     autoRetry: true,
 });
 
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 const currencyConverterMap = {
     MNT: "mantle",
-    USDC: "usd",
 };
 
 const currencyConverterCache: Record<
     string,
     {
-        setTime: number;
-        rate: number;
+        timestamp: number;
+        result: number;
     }
 > = {};
 
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-
-const getFromCache = (key: string): number | null => {
-    const cached = currencyConverterCache[key];
-    if (cached && Date.now() - cached.setTime < CACHE_DURATION) {
-        return cached.rate;
+const updateOracleDataGasCache: Record<
+    string,
+    {
+        result: {
+            gasCostUSDC: number;
+            gasCostNative: number;
+            providerAmount: bigint;
+            gasCostUSDCUnits: bigint;
+        };
+        timestamp: number;
     }
-    return null;
-};
+> = {};
 
-const setToCache = (key: string, rate: number): void => {
-    currencyConverterCache[key] = {
-        setTime: Date.now(),
-        rate,
+const cacheWrapper = async <T>(
+    key: string,
+    cache: Record<
+        string,
+        {
+            result: T;
+            timestamp: number;
+        }
+    >,
+    fn: () => Promise<T>,
+): Promise<T> => {
+    const cached = cache[key];
+
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        return cached.result;
+    }
+
+    const result = await fn();
+
+    cache[key] = {
+        result,
+        timestamp: Date.now(),
     };
+
+    return result;
 };
 
-export const currencyConverter = async (
-    fromCurrency: keyof typeof currencyConverterMap,
-    toCurrency: keyof typeof currencyConverterMap,
-    amount: number,
-    decimals: number = 18,
-): Promise<number> => {
-    const cacheKey = `${fromCurrency}_${toCurrency}`;
-    const cachedRate = getFromCache(cacheKey);
-    if (cachedRate !== null) {
-        return Number((amount * cachedRate).toFixed(decimals));
-    }
+export const currencyConverter = async (from: string, amount: number): Promise<number> => {
+    const toId = "usd";
+    const toCurrency = "USDC";
+    const cacheKey = `${from}_${toCurrency}`;
+    return cacheWrapper(cacheKey, currencyConverterCache, async () => {
+        const fromId = currencyConverterMap[from as keyof typeof currencyConverterMap];
 
-    const fromId = currencyConverterMap[fromCurrency];
-    const toId = currencyConverterMap[toCurrency];
+        if (!fromId) {
+            throw new Error(`Unsupported currency conversion: ${from} to ${toCurrency}`);
+        }
 
-    if (!fromId || !toId) {
-        throw new Error(`Unsupported currency conversion: ${fromCurrency} to ${toCurrency}`);
-    }
+        const priceData = await geckoClient.simplePrice({
+            ids: fromId,
+            vs_currencies: toId,
+        });
 
-    const priceData = await geckoClient.simplePrice({
-        ids: fromId,
-        vs_currencies: toId,
+        const rate = priceData[fromId][toId];
+
+        return Number((amount * rate).toFixed(6));
     });
-
-    const rate = priceData[fromId][toId];
-    setToCache(cacheKey, rate);
-
-    return Number((amount * rate).toFixed(decimals));
 };
 
 export const getKeyPath = (): string => {
@@ -106,14 +123,17 @@ export const prepareSignature = async (
         network.provider as any,
     );
 
-    const name = await token.name();
-    const version = await token.version();
+    const [name, version, verifyingContract] = await Promise.all([
+        token.name(),
+        token.version(),
+        token.getAddress(),
+    ]);
 
     const domain = {
         name,
         version,
+        verifyingContract,
         chainId: network.id,
-        verifyingContract: await token.getAddress(),
     };
 
     // EIP-712 Type
@@ -145,42 +165,48 @@ export const prepareSignature = async (
 
 export const calculateUpdateOracleDataGas = async (
     factory: OracleFactory,
-    networkObj: Network,
+    network: Network,
     updatePrice: bigint,
     oracleProvider: string,
     oracleAddress: string,
     currentData: string,
 ) => {
-    const config = await factory.config();
-    const rpcProvider = networkObj.provider;
-    const adminWallet = getAdminWallet(rpcProvider);
-    const providerAmount = updatePrice - (updatePrice * BigInt(config.oracleFactoryShare)) / 100n;
+    const cacheKey = `${network.id}_${oracleAddress}_${oracleProvider}`;
+    return cacheWrapper(cacheKey, updateOracleDataGasCache, async () => {
+        const rpcProvider = network.provider;
+        const adminWallet = getAdminWallet(rpcProvider);
+        const [config, { gasPrice }] = await Promise.all([
+            factory.config(),
+            rpcProvider.getFeeData(),
+        ]);
+        const providerAmount =
+            updatePrice - (updatePrice * BigInt(config.oracleFactoryShare)) / 100n;
 
-    const { validAfter, validBefore, nonce, sig } = await prepareSignature(
-        networkObj,
-        adminWallet,
-        adminWallet.address,
-        oracleProvider,
-        providerAmount,
-    );
+        const { validAfter, validBefore, nonce, sig } = await prepareSignature(
+            network,
+            adminWallet,
+            adminWallet.address,
+            oracleProvider,
+            providerAmount,
+        );
 
-    const dataUpdateEstimateGas = await factory.updateOracleData.estimateGas(
-        oracleAddress,
-        currentData,
-        validAfter,
-        validBefore,
-        nonce,
-        sig.v,
-        sig.r,
-        sig.s,
-        {
-            from: adminWallet.address,
-        },
-    );
-    const { gasPrice } = await rpcProvider.getFeeData();
-    const gasCostWei = dataUpdateEstimateGas * (gasPrice ?? 0n);
-    const gasCostMNT = Number(ethers.formatEther(gasCostWei));
-    const gasCostUSD = await currencyConverter("MNT", "USDC", gasCostMNT, 6);
-    const gasCostUSDUnits = parseUnits(gasCostUSD.toString(), 6);
-    return { providerAmount, gasCostMNT, gasCostUSD, gasCostUSDUnits };
+        const dataUpdateEstimateGas = await factory.updateOracleData.estimateGas(
+            oracleAddress,
+            currentData,
+            validAfter,
+            validBefore,
+            nonce,
+            sig.v,
+            sig.r,
+            sig.s,
+            {
+                from: adminWallet.address,
+            },
+        );
+        const gasCostWei = dataUpdateEstimateGas * (gasPrice ?? 0n);
+        const gasCostNative = Number(ethers.formatEther(gasCostWei));
+        const gasCostUSDC = await currencyConverter(network.native, gasCostNative);
+        const gasCostUSDCUnits = parseUnits(gasCostUSDC.toString(), 6);
+        return { providerAmount, gasCostNative, gasCostUSDC, gasCostUSDCUnits };
+    });
 };

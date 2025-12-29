@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import logger from "../lib/logger";
 import { ViemChainMapId } from "../lib/types";
 import { privateKeyToAccount } from "viem/accounts";
 import { toFacilitatorEvmSigner } from "@x402/evm";
@@ -98,22 +99,22 @@ const getFacilitator = (chainId: ViemChainMapId) => {
 
     const facilitator = new x402Facilitator()
         .onBeforeVerify(async context => {
-            console.log(`[Chain ${chainId}] Before verify`, context);
+            logger.info("[Chain ${chainId}] Before verify", context);
         })
         .onAfterVerify(async context => {
-            console.log(`[Chain ${chainId}] After verify`, context);
+            logger.info("[Chain ${chainId}] After verify", context);
         })
         .onVerifyFailure(async context => {
-            console.log(`[Chain ${chainId}] Verify failure`, context);
+            logger.error("[Chain ${chainId}] Verify failure", context);
         })
         .onBeforeSettle(async context => {
-            console.log(`[Chain ${chainId}] Before settle`, context);
+            logger.info("[Chain ${chainId}] Before settle", context);
         })
         .onAfterSettle(async context => {
-            console.log(`[Chain ${chainId}] After settle`, context);
+            logger.info("[Chain ${chainId}] After settle", context);
         })
         .onSettleFailure(async context => {
-            console.log(`[Chain ${chainId}] Settle failure`, context);
+            logger.error("[Chain ${chainId}] Settle failure", context);
         });
 
     registerExactEvmScheme(facilitator, {
@@ -165,7 +166,6 @@ function validateChainId(req: Request, res: Response, next: NextFunction) {
 router.post("/:chainId/verify", validateChainId, async (req, res) => {
     try {
         const chainId = getChainMapId(req.params);
-        console.log('Verify request received', chainId);
         const { paymentPayload, paymentRequirements } = req.body as {
             paymentPayload: PaymentPayload;
             paymentRequirements: PaymentRequirements;
@@ -185,7 +185,7 @@ router.post("/:chainId/verify", validateChainId, async (req, res) => {
 
         res.json(response);
     } catch (error) {
-        console.error("Verify error:", error);
+        logger.error("Verify error:", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Unknown error",
         });
@@ -195,7 +195,6 @@ router.post("/:chainId/verify", validateChainId, async (req, res) => {
 router.post("/:chainId/settle", validateChainId, async (req, res) => {
     try {
         const chainId = getChainMapId(req.params);
-        console.log('Settle request received', chainId);
         const { paymentPayload, paymentRequirements } = req.body;
 
         if (!paymentPayload || !paymentRequirements) {
@@ -212,7 +211,7 @@ router.post("/:chainId/settle", validateChainId, async (req, res) => {
 
         res.json(response);
     } catch (error) {
-        console.error("Settle error:", error);
+        logger.error("Settle error:", error);
 
         if (error instanceof Error && error.message.includes("Settlement aborted:")) {
             return res.json({
@@ -235,7 +234,7 @@ router.get("/:chainId/supported", validateChainId, async (req, res) => {
         const response = facilitator.getSupported();
         res.json(response);
     } catch (error) {
-        console.error("Supported error:", error);
+        logger.error("Supported error:", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Unknown error",
         });

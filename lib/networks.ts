@@ -10,6 +10,7 @@ export const baseNetworks = {
     "mantle-testnet": {
         id: 5003,
         testnet: true,
+        native: "MNT",
         rpc: "https://rpc.sepolia.mantle.xyz",
         currency: {
             decimals: 6,
@@ -22,6 +23,7 @@ export const baseNetworks = {
     mantle: {
         id: 5000,
         testnet: false,
+        native: "MNT",
         rpc: "https://rpc.mantle.xyz",
         currency: {
             decimals: 6,
@@ -44,6 +46,8 @@ export const networks = Object.fromEntries(
         },
     ]),
 ) as Record<string, Network>;
+
+export const networkNames = Object.keys(networks);
 
 export const networkIds = Object.values(networks).map(network => network.id);
 
