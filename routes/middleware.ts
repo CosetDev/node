@@ -91,11 +91,19 @@ export async function oracleDetails(
 
     try {
         const oracle = Oracle__factory.connect(oracleAddress, rpcProvider as any);
-        const factory = OracleFactory__factory.connect(await oracle.factory(), rpcProvider as any);
+        const [factory, oracleProvider, updatePrice, currentData] = await Promise.all([
+            OracleFactory__factory.connect(await oracle.factory(), rpcProvider as any),
+            oracle.getProvider(),
+            oracle.dataUpdatePrice(),
+            oracle.getDataWithoutCheck(),
+        ]);
 
-        const oracleProvider = await oracle.getProvider();
-        const updatePrice = await oracle.dataUpdatePrice();
-        const currentData = await oracle.getDataWithoutCheck();
+        console.log("Fetched oracle details:", {
+            factory: factory,
+            oracleProvider,
+            updatePrice: updatePrice.toString(),
+            currentData,
+        });
 
         const { providerAmount, gasCostMNT, gasCostUSD, gasCostUSDUnits } =
             await calculateUpdateOracleDataGas(
@@ -126,6 +134,7 @@ export async function oracleDetails(
 
         next();
     } catch (error) {
+        console.error("Error fetching oracle details:", error);
         res.status(500).json({ error: "Failed to fetch oracle details" });
     }
 }

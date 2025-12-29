@@ -164,6 +164,18 @@ export const calculateUpdateOracleDataGas = async (
         providerAmount,
     );
 
+    console.log(oracleAddress,
+        currentData,
+        validAfter,
+        validBefore,
+        nonce,
+        sig.v,
+        sig.r,
+        sig.s,
+        {
+            from: adminWallet.address,
+        },);
+
     const dataUpdateEstimateGas = await factory.updateOracleData.estimateGas(
         oracleAddress,
         currentData,
@@ -177,6 +189,7 @@ export const calculateUpdateOracleDataGas = async (
             from: adminWallet.address,
         },
     );
+    console.log("Estimated gas for data update:", dataUpdateEstimateGas);
     const { gasPrice } = await rpcProvider.getFeeData();
     const gasCostWei = dataUpdateEstimateGas * (gasPrice ?? 0n);
     const gasCostMNT = Number(ethers.formatEther(gasCostWei));
