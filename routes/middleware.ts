@@ -20,6 +20,7 @@ export function dynamic402(
     const oracleAddress = req.body.oracle.address;
     const network = req.body.oracle.network.eip155;
     const currency = req.body.oracle.network.currency;
+    const providerAmount = req.body.oracle.providerAmount;
     const facilitatorClient = new HTTPFacilitatorClient({
         url: req.body.oracle.network.facilitator,
     });
@@ -39,6 +40,7 @@ export function dynamic402(
                         version: currency.version || "1",
                         priceDetails: {
                             methodGasFee: req.body.oracle.methodGasFee,
+                            providerAmount: formatUnits(providerAmount, currency.decimals),
                             totalCost: formatUnits(req.body.oracle.totalCost, currency.decimals),
                             updatePrice: formatUnits(
                                 req.body.oracle.updatePrice,
