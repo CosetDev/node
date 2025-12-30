@@ -3,9 +3,8 @@ import { homedir } from "os";
 import { Network } from "./types";
 import { readFileSync } from "fs";
 import { CoinGeckoClient } from "coingecko-api-v3";
-import { ethers, parseUnits, Signer, JsonRpcProvider, Wallet } from "ethers";
 import { IERC20Extended__factory, OracleFactory } from "@coset-dev/contracts";
-import { networks } from "./networks";
+import { ethers, parseUnits, Signer, JsonRpcProvider, Wallet, BytesLike } from "ethers";
 
 export const getAdminWallet = (provider: JsonRpcProvider): Wallet => {
     return new Wallet(process.env.WALLET_PRIVATE_KEY!, provider);
@@ -70,7 +69,11 @@ const cacheWrapper = async <T>(
     return result;
 };
 
-export const currencyConverter = async (from: string, amount: number): Promise<number> => {
+export const currencyConverter = async (
+    from: string,
+    amount: number,
+    decimals = 6,
+): Promise<number> => {
     const toId = "usd";
     const toCurrency = "USDC";
     const cacheKey = `${from}_${toCurrency}`;
@@ -88,7 +91,7 @@ export const currencyConverter = async (from: string, amount: number): Promise<n
 
         const rate = priceData[fromId][toId];
 
-        return Number((amount * rate).toFixed(6));
+        return Number((amount * rate).toFixed(decimals));
     });
 };
 
@@ -206,7 +209,23 @@ export const calculateUpdateOracleDataGas = async (
         const gasCostWei = dataUpdateEstimateGas * (gasPrice ?? 0n);
         const gasCostNative = Number(ethers.formatEther(gasCostWei));
         const gasCostUSDC = await currencyConverter(network.native, gasCostNative);
-        const gasCostUSDCUnits = parseUnits(gasCostUSDC.toString(), 6);
+        const gasCostUSDCUnits = parseUnits(gasCostUSDC.toString(), network.currency.decimals);
         return { providerAmount, gasCostNative, gasCostUSDC, gasCostUSDCUnits };
     });
+};
+
+export const toBytes = (str: string | object) => {
+    if (typeof str === "object") {
+        str = JSON.stringify(str);
+    }
+    return ethers.toUtf8Bytes(str);
+};
+
+export const fromBytes = (data: BytesLike) => {
+    const str = ethers.toUtf8String(data);
+    try {
+        return JSON.parse(str);
+    } catch {
+        return str;
+    }
 };
