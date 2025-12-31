@@ -11,6 +11,7 @@ export interface IOracle {
     api: {
         protocol: "https" | "wss";
         url: string;
+        accessToken?: string;
     };
     provider: HexAddress;
     network: NetworkKeys;
