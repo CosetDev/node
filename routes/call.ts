@@ -96,7 +96,7 @@ router.get("/get-data-update-price", async (req: CallRequest, res) => {
         const price = await req.body.oracle.dataUpdatePrice();
         res.status(200).json({
             units: price.toString(),
-            amount: Number(formatUnits(price.toString(), req.body.network.currency.decimals)),
+            amount: Number(formatUnits(price.toString(), 6)),
         });
     } catch (error) {
         res.status(500).json({
@@ -109,10 +109,9 @@ router.get("/get-data-update-price", async (req: CallRequest, res) => {
 router.get("/get-balance", async (req: CallRequest, res) => {
     try {
         const sender = req.query.sender as string;
-        const token = IERC20Extended__factory.connect(
-            req.body.network.currency.address,
-            req.body.network.provider as any,
-        );
+        const currency = req.query.currency as string;
+        const provider = req.body.network.provider as any;
+        const token = IERC20Extended__factory.connect(currency, provider);
         const balance = await token.balanceOf(sender);
         res.status(200).json({
             units: balance.toString(),

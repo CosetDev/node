@@ -12,26 +12,44 @@ export const baseNetworks = {
         testnet: true,
         native: "MNT",
         rpc: "https://rpc.sepolia.mantle.xyz",
-        currency: {
-            decimals: 6,
-            name: "Testnet USDC",
-            symbol: "TUSDC",
-            version: "2",
-            address: "0x05856b07544044873616d390Cc50c785fe8a8885",
-        },
+        currencies: [
+            {
+                decimals: 6,
+                name: "Testnet USDC",
+                symbol: "TUSDC",
+                version: "2",
+                address: "0x05856b07544044873616d390Cc50c785fe8a8885",
+            },
+            {
+                decimals: 6,
+                name: "Coset",
+                symbol: "CST",
+                version: "1",
+                address: "0x77A90090C9bcc45940E18657fB82Fb70A2D494fd",
+            },
+        ],
     },
     mantle: {
         id: 5000,
         testnet: false,
         native: "MNT",
         rpc: "https://rpc.mantle.xyz",
-        currency: {
-            decimals: 6,
-            name: "USD Coin",
-            symbol: "USDC",
-            version: "2",
-            address: "0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9",
-        },
+        currencies: [
+            {
+                decimals: 6,
+                name: "USD Coin",
+                symbol: "USDC",
+                version: "2",
+                address: "0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9",
+            },
+            {
+                decimals: 6,
+                name: "Coset",
+                symbol: "CST",
+                version: "1",
+                address: "0x77A90090C9bcc45940E18657fB82Fb70A2D494fd",
+            },
+        ],
     },
 };
 

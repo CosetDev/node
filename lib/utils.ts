@@ -1,7 +1,7 @@
 import { join } from "path";
 import { homedir } from "os";
-import { Network } from "./types";
 import { readFileSync } from "fs";
+import { Currency, Network } from "./types";
 import { CoinGeckoClient } from "coingecko-api-v3";
 import { IERC20Extended__factory, OracleFactory } from "@coset-dev/contracts";
 import { ethers, parseUnits, Signer, JsonRpcProvider, Wallet, BytesLike } from "ethers";
@@ -33,10 +33,10 @@ const updateOracleDataGasCache: Record<
     string,
     {
         result: {
-            gasCostUSDC: number;
+            gasCostToken: number;
             gasCostNative: number;
             providerAmount: bigint;
-            gasCostUSDCUnits: bigint;
+            gasCostTokenUnits: bigint;
         };
         timestamp: number;
     }
@@ -113,6 +113,7 @@ export const getKey = (): string => {
 
 export const prepareSignature = async (
     network: Network,
+    currency: Currency,
     signer: Signer,
     from: string,
     to: string,
@@ -121,10 +122,7 @@ export const prepareSignature = async (
     const validAfter = 0;
     const validBefore = Math.floor(Date.now() / 1000) + 3600;
     const nonce = ethers.hexlify(ethers.randomBytes(32));
-    const token = IERC20Extended__factory.connect(
-        network.currency.address,
-        network.provider as any,
-    );
+    const token = IERC20Extended__factory.connect(currency.address, network.provider as any);
 
     const [name, version, verifyingContract] = await Promise.all([
         token.name(),
@@ -169,10 +167,12 @@ export const prepareSignature = async (
 export const calculateUpdateOracleDataGas = async (
     factory: OracleFactory,
     network: Network,
+    currency: Currency,
     updatePrice: bigint,
     oracleProvider: string,
     oracleAddress: string,
     currentData: string,
+    oneUsdcInCst: bigint,
 ) => {
     const cacheKey = `${network.id}_${oracleAddress}_${oracleProvider}`;
     return cacheWrapper(cacheKey, updateOracleDataGasCache, async () => {
@@ -187,6 +187,7 @@ export const calculateUpdateOracleDataGas = async (
 
         const { validAfter, validBefore, nonce, sig } = await prepareSignature(
             network,
+            currency,
             adminWallet,
             adminWallet.address,
             oracleProvider,
@@ -194,6 +195,7 @@ export const calculateUpdateOracleDataGas = async (
         );
 
         const dataUpdateEstimateGas = await factory.updateOracleData.estimateGas(
+            currency.address,
             oracleAddress,
             currentData,
             validAfter,
@@ -208,9 +210,15 @@ export const calculateUpdateOracleDataGas = async (
         );
         const gasCostWei = dataUpdateEstimateGas * (gasPrice ?? 0n);
         const gasCostNative = Number(ethers.formatEther(gasCostWei));
-        const gasCostUSDC = await currencyConverter(network.native, gasCostNative);
-        const gasCostUSDCUnits = parseUnits(gasCostUSDC.toString(), network.currency.decimals);
-        return { providerAmount, gasCostNative, gasCostUSDC, gasCostUSDCUnits };
+        let gasCostToken = await currencyConverter(network.native, gasCostNative);
+        let gasCostTokenUnits = parseUnits(gasCostToken.toString(), currency.decimals);
+
+        if (currency.symbol === "CST") {
+            gasCostTokenUnits = (gasCostTokenUnits * oneUsdcInCst) / BigInt(1e6);
+            gasCostToken = Number(ethers.formatUnits(gasCostTokenUnits, currency.decimals));
+        }
+
+        return { providerAmount, gasCostNative, gasCostToken, gasCostTokenUnits };
     });
 };
 
