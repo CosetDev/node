@@ -11,6 +11,7 @@ export interface IOracle {
     api: {
         protocol: "https" | "wss";
         url: string;
+        accessToken?: string;
     };
     provider: HexAddress;
     network: NetworkKeys;
@@ -36,6 +37,7 @@ const OracleSchema = new Schema<IOracleDocument>(
         api: {
             protocol: { type: String, enum: ["https", "wss"], required: true },
             url: { type: String, required: true },
+            accessToken: { type: String },
         },
         provider: { type: String, required: true },
         network: { type: String, required: true },

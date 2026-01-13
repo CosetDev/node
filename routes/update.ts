@@ -1,7 +1,6 @@
 import { toUtf8Bytes } from "ethers";
 import { Router, Request } from "express";
 
-import Keys from "../models/Keys";
 import Oracle from "../models/Oracles";
 
 import logger from "../lib/logger";
@@ -24,7 +23,7 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
         return;
     }
 
-    const providerApiKey = (await Keys.findOne({ wallet: oracleRecord.provider }))?.apiKey;
+    const providerApiKey = oracleRecord.api.accessToken;
     if (!providerApiKey) {
         res.status(400).json({ error: "Provider API key not found." });
         return;
