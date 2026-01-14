@@ -38,7 +38,7 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
 
     // Call webhook to get updated data
     try {
-        const webhookRes = await fetch(`https://${oracleRecord.api.url}`, {
+        const webhookRes = await fetch(oracleRecord.api.url, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",

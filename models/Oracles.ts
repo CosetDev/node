@@ -6,7 +6,7 @@ export interface IOracle {
     description: string;
     verifications: {
         api: boolean;
-        signature: string | null;
+        signature: HexAddress | null;
     };
     api: {
         protocol: "https" | "wss";
@@ -18,7 +18,6 @@ export interface IOracle {
     address: HexAddress;
     requestPrice: number;
     recommendedUpdateDuration?: number;
-    deploymentTx?: HexAddress;
 }
 
 export interface IOracleDocument extends IOracle, Document {
@@ -28,7 +27,7 @@ export interface IOracleDocument extends IOracle, Document {
 
 const OracleSchema = new Schema<IOracleDocument>(
     {
-        name: { type: String, required: true, unique: true },
+        name: { type: String, required: true },
         description: { type: String, required: true },
         verifications: {
             api: { type: Boolean, required: true },
@@ -37,14 +36,12 @@ const OracleSchema = new Schema<IOracleDocument>(
         api: {
             protocol: { type: String, enum: ["https", "wss"], required: true },
             url: { type: String, required: true },
-            accessToken: { type: String },
         },
         provider: { type: String, required: true },
         network: { type: String, required: true },
         address: { type: String, required: true, unique: true },
         requestPrice: { type: Number, required: true },
         recommendedUpdateDuration: { type: Number },
-        deploymentTx: { type: String },
         createdAt: { type: Date, default: Date.now },
     },
     { versionKey: false },
