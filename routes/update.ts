@@ -14,7 +14,7 @@ router.use(oracleDetails, dynamic402);
 
 // Oracle update route
 router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
-    const { factory, address, network, providerAmount } = req.body.oracle;
+    const { factory, address, network, providerAmount, currency } = req.body.oracle;
 
     // Get oracle record from DB
     const oracleRecord = await Oracle.findOne({ address });
@@ -61,6 +61,7 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
 
     const { validAfter, validBefore, nonce, sig } = await prepareSignature(
         network,
+        currency,
         adminWallet,
         adminWallet.address,
         oracleRecord.provider,
@@ -69,7 +70,17 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
 
     factory
         .connect(adminWallet as any)
-        .updateOracleData(address, dataBytes, validAfter, validBefore, nonce, sig.v, sig.r, sig.s)
+        .updateOracleData(
+            currency.address,
+            address,
+            dataBytes,
+            validAfter,
+            validBefore,
+            nonce,
+            sig.v,
+            sig.r,
+            sig.s,
+        )
         .then(tx => {
             tx.wait()
                 .then(receipt => {

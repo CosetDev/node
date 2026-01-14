@@ -1,4 +1,4 @@
-import { formatUnits } from "ethers";
+import { formatUnits, ZeroAddress } from "ethers";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
@@ -8,7 +8,7 @@ import { Oracle__factory, OracleFactory__factory } from "@coset-dev/contracts";
 import logger from "../lib/logger";
 import { networkNames, networks } from "../lib/networks";
 import { HexAddress, RequestBody, RequestParams } from "../lib/types";
-import { calculateUpdateOracleDataGas, getAdminWallet } from "../lib/utils";
+import { calculateUpdateOracleDataGas, fromBytes, getAdminWallet } from "../lib/utils";
 
 // Oracle payment middleware
 export function dynamic402(
@@ -16,10 +16,10 @@ export function dynamic402(
     res: Response,
     next: NextFunction,
 ): Promise<void> {
+    const currency = req.body.oracle.currency;
     const totalCost = req.body.oracle.totalCost;
     const oracleAddress = req.body.oracle.address;
     const network = req.body.oracle.network.eip155;
-    const currency = req.body.oracle.network.currency;
     const providerAmount = req.body.oracle.providerAmount;
     const facilitatorClient = new HTTPFacilitatorClient({
         url: req.body.oracle.network.facilitator,
@@ -66,7 +66,7 @@ export async function oracleDetails(
     res: Response,
     next: NextFunction,
 ): Promise<void> {
-    const { networkName, oracleAddress } = req.body;
+    const { networkName, oracleAddress, paymentToken } = req.body;
 
     if (!oracleAddress || !networkName) {
         res.status(400).json({ error: "Missing details in request" });
@@ -81,35 +81,64 @@ export async function oracleDetails(
     const network = networks[networkName];
     const rpcProvider = network.provider;
 
+    const currency = network.currencies.find(
+        curr => curr.address.toLowerCase() === paymentToken.toLowerCase(),
+    );
+
+    if (!currency) {
+        res.status(400).json({ error: "Invalid payment token for selected network" });
+        return;
+    }
+
     try {
         const oracle = Oracle__factory.connect(oracleAddress, rpcProvider as any);
-        const [factory, oracleProvider, updatePrice, currentData] = await Promise.all([
+        let [factory, oracleProvider, updatePrice, currentData] = await Promise.all([
             OracleFactory__factory.connect(await oracle.factory(), rpcProvider as any),
             oracle.getProvider(),
             oracle.dataUpdatePrice(),
             oracle.getDataWithoutCheck(),
         ]);
 
-        const { providerAmount, gasCostNative, gasCostUSDC, gasCostUSDCUnits } =
+        let oneUsdcInCst: bigint = BigInt(0);
+        if (currency.symbol === "CST") {
+            const cstPriceOracleAddress = await factory.cstPriceOracle();
+            if (cstPriceOracleAddress === ZeroAddress) {
+                res.status(400).json({
+                    error: "CST price oracle is not set in the factory contract",
+                });
+                return;
+            }
+            const cstPriceOracle = Oracle__factory.connect(
+                cstPriceOracleAddress,
+                rpcProvider as any,
+            );
+            oneUsdcInCst = BigInt(fromBytes(await cstPriceOracle.getDataWithoutCheck()));
+            updatePrice = (updatePrice * oneUsdcInCst) / BigInt(1e6);
+        }
+
+        const { providerAmount, gasCostNative, gasCostToken, gasCostTokenUnits } =
             await calculateUpdateOracleDataGas(
                 factory,
                 network,
+                currency,
                 updatePrice,
                 oracleProvider,
                 oracleAddress,
                 currentData,
+                oneUsdcInCst
             );
 
-        const totalCost = updatePrice + gasCostUSDCUnits;
+        const totalCost = updatePrice + gasCostTokenUnits;
 
         req.body.oracle = {
             factory,
             network,
             totalCost,
+            currency,
             providerAmount,
             address: oracleAddress,
             methodGasFee: {
-                usdc: Number(gasCostUSDC),
+                token: Number(gasCostToken),
                 native: Number(gasCostNative),
             },
             updatePrice: Number(updatePrice),

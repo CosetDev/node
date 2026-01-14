@@ -4,17 +4,19 @@ import { baseNetworks, viemChainMap } from "./networks";
 
 export type HexAddress = `0x${string}`;
 
+export type Currency = {
+    decimals: number;
+    name: string;
+    symbol: string;
+    version: string;
+    address: HexAddress;
+};
+
 export type Network = {
     id: number;
     rpc: string;
     native: string;
-    currency: {
-        decimals: number;
-        name: string;
-        symbol: string;
-        version: string;
-        address: HexAddress;
-    };
+    currencies: Currency[];
     testnet: boolean;
     facilitator: string;
     eip155: `eip155:${number}`;
@@ -34,6 +36,7 @@ export interface RequestParams {
 export interface RequestBody {
     networkName: NetworkKeys;
     oracleAddress: HexAddress;
+    paymentToken: HexAddress;
     oracle: {
         totalCost: bigint;
         address: HexAddress;
@@ -42,8 +45,9 @@ export interface RequestBody {
         providerAmount: bigint;
         factory: OracleFactory;
         network: Networks[NetworkKeys];
+        currency: Currency;
         methodGasFee: {
-            usdc: number;
+            token: number;
             native: number;
         };
     };

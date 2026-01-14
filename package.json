@@ -16,7 +16,7 @@
     "author": "oynozan",
     "license": "MIT",
     "dependencies": {
-        "@coset-dev/contracts": "^1.0.7",
+        "@coset-dev/contracts": "^1.0.8",
         "@x402/core": "^2.1.0",
         "@x402/evm": "^2.1.0",
         "@x402/express": "^2.1.0",
