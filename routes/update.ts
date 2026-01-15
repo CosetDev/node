@@ -105,13 +105,17 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
                     const providerEarning = Number(
                         formatUnits(providerAmount.toString(), currency.decimals),
                     );
+                    const updatePriceN = Number(
+                        formatUnits(updatePrice.toString(), currency.decimals),
+                    );
+                    const platformFee = updatePriceN - providerEarning;
                     const paymentRecord = new Payments({
-                        currency: currency.symbol,
-                        network: networkName,
                         totalPaid,
+                        platformFee,
                         providerEarning,
+                        network: networkName,
+                        currency: currency.symbol,
                         gasFee: methodGasFee.token,
-                        platformFee: totalPaid - providerEarning - methodGasFee.token,
                         oracle: oracleRecord._id,
                     });
 
