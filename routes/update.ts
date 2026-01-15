@@ -1,9 +1,10 @@
-import { toUtf8Bytes } from "ethers";
+import { formatUnits, parseUnits, toUtf8Bytes } from "ethers";
 import { Router, Request } from "express";
 
 import Oracle from "../models/Oracles";
 
 import logger from "../lib/logger";
+import Payments from "../models/Payments";
 import { dynamic402, oracleDetails } from "./middleware";
 import { RequestBody, RequestParams } from "../lib/types";
 import { getAdminWallet, prepareSignature } from "../lib/utils";
@@ -14,7 +15,18 @@ router.use(oracleDetails, dynamic402);
 
 // Oracle update route
 router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
-    const { factory, address, network, providerAmount, currency } = req.body.oracle;
+    const {
+        factory,
+        address,
+        network,
+        providerAmount,
+        methodGasFee,
+        updatePrice,
+        totalCost,
+        currency,
+    } = req.body.oracle;
+
+    const { networkName } = req.body;
 
     // Get oracle record from DB
     const oracleRecord = await Oracle.findOne({ address });
@@ -64,7 +76,7 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
         currency,
         adminWallet,
         adminWallet.address,
-        oracleRecord.provider,
+        oracleRecord.owner,
         providerAmount,
     );
 
@@ -87,6 +99,24 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
                     res.status(200).json({
                         data: receivedData,
                         transactionHash: receipt?.hash,
+                    });
+
+                    const totalPaid = Number(formatUnits(totalCost.toString(), currency.decimals));
+                    const providerEarning = Number(
+                        formatUnits(providerAmount.toString(), currency.decimals),
+                    );
+                    const paymentRecord = new Payments({
+                        currency: currency.symbol,
+                        network: networkName,
+                        totalPaid,
+                        providerEarning,
+                        gasFee: methodGasFee.token,
+                        platformFee: totalPaid - providerEarning - methodGasFee.token,
+                        oracle: oracleRecord._id,
+                    });
+
+                    paymentRecord.save().catch((err: unknown) => {
+                        logger.error(err as string);
                     });
                 })
                 .catch((err: any) => {

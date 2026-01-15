@@ -13,7 +13,7 @@ export interface IOracle {
         url: string;
         accessToken?: string;
     };
-    provider: HexAddress;
+    owner: HexAddress;
     network: NetworkKeys;
     address: HexAddress;
     requestPrice: number;
@@ -36,10 +36,11 @@ const OracleSchema = new Schema<IOracleDocument>(
         api: {
             protocol: { type: String, enum: ["https", "wss"], required: true },
             url: { type: String, required: true },
+            accessToken: { type: String },
         },
-        provider: { type: String, required: true },
+        owner: { type: String, required: true },
         network: { type: String, required: true },
-        address: { type: String, required: true, unique: true },
+        address: { type: String, unique: true, sparse: true },
         requestPrice: { type: Number, required: true },
         recommendedUpdateDuration: { type: Number },
         createdAt: { type: Date, default: Date.now },
