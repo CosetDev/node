@@ -174,7 +174,7 @@ export const calculateUpdateOracleDataGas = async (
     currentData: string,
     oneUsdcInCst: bigint,
 ) => {
-    const cacheKey = `${network.id}_${oracleAddress}_${oracleProvider}`;
+    const cacheKey = `${network.id}_${oracleAddress}_${oracleProvider}_${currency.address}`;
     return cacheWrapper(cacheKey, updateOracleDataGasCache, async () => {
         const rpcProvider = network.provider;
         const adminWallet = getAdminWallet(rpcProvider);
