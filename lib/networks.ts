@@ -3,7 +3,7 @@ import { JsonRpcProvider } from "ethers";
 import { mantle, mantleSepoliaTestnet as mantleTestnet } from "viem/chains";
 
 const getFacilitatorUrl = (networkId: number): string => {
-    return "http://localhost:" + (process.env.SERVER_PORT || "5001") + "/facilitator/" + networkId;
+    return "https://node1.coset.dev/facilitator/" + networkId;
 };
 
 export const baseNetworks = {
