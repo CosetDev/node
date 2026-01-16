@@ -1,8 +1,8 @@
-require("dotenv").config();
-
 import cors from "cors";
 import helmet from "helmet";
+import dotenv from "dotenv";
 import mongoose from "mongoose";
+import { createServer } from "http";
 import cookieParser from "cookie-parser";
 import express, { type Application } from "express";
 
@@ -12,8 +12,10 @@ import { socketServer } from "./socket";
 import facilitator from "./routes/facilitator";
 import { SocketListeners } from "./socket/listeners";
 
+dotenv.config();
+
 const app: Application = express();
-const server = require("http").createServer(app);
+const server = createServer(app);
 
 app.set("trust proxy", 1);
 app.use(cors({ origin: "*" }));

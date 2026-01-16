@@ -1,4 +1,7 @@
+import dotenv from "dotenv";
 import winston from "winston";
+
+dotenv.config();
 
 const logger = winston.createLogger({
     level: "info",
@@ -10,8 +13,8 @@ const logger = winston.createLogger({
         }),
     ),
     transports: [
-        new winston.transports.File({ filename: "logs/error.log", level: "error" }),
-        new winston.transports.File({ filename: "logs/info.log", level: "info" }),
+        new winston.transports.File({ filename: `${process.env.LOG_DIR}/error.log`, level: "error" }),
+        new winston.transports.File({ filename: `${process.env.LOG_DIR}/info.log`, level: "info" }),
     ],
 });
 
