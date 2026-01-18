@@ -99,22 +99,22 @@ const getFacilitator = (chainId: ViemChainMapId) => {
 
     const facilitator = new x402Facilitator()
         .onBeforeVerify(async context => {
-            logger.info("[Chain ${chainId}] Before verify", context);
+            logger.info(`[Chain ${chainId}] Before verify`, context);
         })
         .onAfterVerify(async context => {
-            logger.info("[Chain ${chainId}] After verify", context);
+            logger.info(`[Chain ${chainId}] After verify`, context);
         })
         .onVerifyFailure(async context => {
-            logger.error("[Chain ${chainId}] Verify failure", context);
+            logger.error(`[Chain ${chainId}] Verify failure`, context);
         })
         .onBeforeSettle(async context => {
-            logger.info("[Chain ${chainId}] Before settle", context);
+            logger.info(`[Chain ${chainId}] Before settle`, context);
         })
         .onAfterSettle(async context => {
-            logger.info("[Chain ${chainId}] After settle", context);
+            logger.info(`[Chain ${chainId}] After settle`, context);
         })
         .onSettleFailure(async context => {
-            logger.error("[Chain ${chainId}] Settle failure", context);
+            logger.error(`[Chain ${chainId}] Settle failure`, context);
         });
 
     registerExactEvmScheme(facilitator, {
@@ -138,29 +138,16 @@ const getChainMapId = (params: { [key: string]: string }): ViemChainMapId => {
 };
 
 function validateChainId(req: Request, res: Response, next: NextFunction) {
-    const chainId = getChainMapId(req.params);
-
-    if (isNaN(chainId)) {
-        return res.status(400).json({
-            error: "Invalid chain ID format",
+    try {
+        getChainMapId(req.params);
+        next();
+    } catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Invalid chain ID",
+            supportedChainIds: Object.keys(viemChainMap).map(id => parseInt(id)),
         });
+        return;
     }
-
-    if (!networkIds.includes(chainId)) {
-        return res.status(400).json({
-            error: `Unsupported chain ID: ${chainId}`,
-            supportedChainIds: networkIds,
-        });
-    }
-
-    if (!viemChainMap[chainId]) {
-        return res.status(400).json({
-            error: `Chain configuration not found for ID: ${chainId}`,
-            supportedChainIds: Object.keys(viemChainMap).map(Number),
-        });
-    }
-
-    next();
 }
 
 router.post("/:chainId/verify", validateChainId, async (req, res) => {
