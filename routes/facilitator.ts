@@ -150,7 +150,7 @@ const getChainMapId = (params: { [key: string]: string }): ViemChainMapId => {
 
 function validateChainId(req: Request, res: Response, next: NextFunction) {
     try {
-        getChainMapId(req.params);
+        getChainMapId(req.params as { chainId: string });
         next();
     } catch (error) {
         res.status(400).json({
@@ -163,7 +163,7 @@ function validateChainId(req: Request, res: Response, next: NextFunction) {
 
 router.post("/:chainId/verify", validateChainId, async (req, res) => {
     try {
-        const chainId = getChainMapId(req.params);
+        const chainId = getChainMapId(req.params as { chainId: string });
         const { paymentPayload, paymentRequirements } = req.body as {
             paymentPayload: PaymentPayload;
             paymentRequirements: PaymentRequirements;
@@ -192,7 +192,7 @@ router.post("/:chainId/verify", validateChainId, async (req, res) => {
 
 router.post("/:chainId/settle", validateChainId, async (req, res) => {
     try {
-        const chainId = getChainMapId(req.params);
+        const chainId = getChainMapId(req.params as { chainId: string });
         const { paymentPayload, paymentRequirements } = req.body;
 
         if (!paymentPayload || !paymentRequirements) {
@@ -227,7 +227,7 @@ router.post("/:chainId/settle", validateChainId, async (req, res) => {
 
 router.get("/:chainId/supported", validateChainId, async (req, res) => {
     try {
-        const chainId = getChainMapId(req.params);
+        const chainId = getChainMapId(req.params as { chainId: string });
         const facilitator = getFacilitator(chainId);
         const response = facilitator.getSupported();
         res.json(response);

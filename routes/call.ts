@@ -22,7 +22,7 @@ type CallRequest = Request<
 const router = Router({ mergeParams: true });
 
 router.use(async (req, res, next) => {
-    const { address } = req.params;
+    const { address } = req.params as { address: string };
 
     const oracleDoc = await OracleDoc.findOne({ address });
     if (!oracleDoc) {
