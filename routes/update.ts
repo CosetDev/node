@@ -99,6 +99,15 @@ router.post("/", async (req: Request<RequestParams, any, RequestBody>, res) => {
                     res.status(200).json({
                         data: receivedData,
                         transactionHash: receipt?.hash,
+                        priceDetails: {
+                            methodGasFee: req.body.oracle.methodGasFee,
+                            providerAmount: formatUnits(providerAmount, currency.decimals),
+                            totalCost: formatUnits(req.body.oracle.totalCost, currency.decimals),
+                            updatePrice: formatUnits(
+                                req.body.oracle.updatePrice,
+                                currency.decimals,
+                            ),
+                        },
                     });
 
                     const totalPaid = Number(formatUnits(totalCost.toString(), currency.decimals));

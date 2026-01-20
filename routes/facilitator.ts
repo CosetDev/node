@@ -28,6 +28,8 @@ if (!WALLET_PRIVATE_KEY.startsWith("0x") || WALLET_PRIVATE_KEY.length !== 66) {
     WALLET_PRIVATE_KEY = `0x${WALLET_PRIVATE_KEY}`;
 }
 
+const specialGasChains = [25, 338];
+
 const evmAccount = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
 
 const walletClientCache = new Map<number, any>();
@@ -87,20 +89,27 @@ const getFacilitator = (chainId: ViemChainMapId) => {
             functionName: string;
             args: readonly unknown[];
         }) => {
-            const estimatedGas = await viemClient.estimateGas({
-                address: args.address,
-                abi: args.abi,
-                functionName: args.functionName,
-                args: args.args || [],
-            });
+            if (specialGasChains.includes(chainId)) {
+                const estimatedGas = await viemClient.estimateGas({
+                    address: args.address,
+                    abi: args.abi,
+                    functionName: args.functionName,
+                    args: args.args || [],
+                });
 
-            const gasLimit = estimatedGas + 20_000n;
+                const gasLimit = estimatedGas + 20_000n;
 
-            return viemClient.writeContract({
-                ...args,
-                args: args.args || [],
-                gas: gasLimit,
-            });
+                return viemClient.writeContract({
+                    ...args,
+                    args: args.args || [],
+                    gas: gasLimit,
+                });
+            } else {
+                return viemClient.writeContract({
+                    ...args,
+                    args: args.args || [],
+                });
+            }
         },
         sendTransaction: (args: { to: `0x${string}`; data: `0x${string}` }) =>
             viemClient.sendTransaction(args),

@@ -37,16 +37,7 @@ export function dynamic402(
                     extra: {
                         name: currency.name,
                         decimals: currency.decimals,
-                        version: currency.version || "1",
-                        priceDetails: {
-                            methodGasFee: req.body.oracle.methodGasFee,
-                            providerAmount: formatUnits(providerAmount, currency.decimals),
-                            totalCost: formatUnits(req.body.oracle.totalCost, currency.decimals),
-                            updatePrice: formatUnits(
-                                req.body.oracle.updatePrice,
-                                currency.decimals,
-                            ),
-                        },
+                        version: currency.version || "1"
                     },
                 },
                 network,
