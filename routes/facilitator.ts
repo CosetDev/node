@@ -81,16 +81,27 @@ const getFacilitator = (chainId: ViemChainMapId) => {
             message: Record<string, unknown>;
             signature: `0x${string}`;
         }) => viemClient.verifyTypedData(args as any),
-        writeContract: (args: {
+        writeContract: async (args: {
             address: `0x${string}`;
             abi: readonly unknown[];
             functionName: string;
             args: readonly unknown[];
-        }) =>
-            viemClient.writeContract({
+        }) => {
+            const estimatedGas = await viemClient.estimateGas({
+                address: args.address,
+                abi: args.abi,
+                functionName: args.functionName,
+                args: args.args || [],
+            });
+
+            const gasLimit = estimatedGas + 20_000n;
+
+            return viemClient.writeContract({
                 ...args,
                 args: args.args || [],
-            }),
+                gas: gasLimit,
+            });
+        },
         sendTransaction: (args: { to: `0x${string}`; data: `0x${string}` }) =>
             viemClient.sendTransaction(args),
         waitForTransactionReceipt: (args: { hash: `0x${string}` }) =>

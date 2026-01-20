@@ -19,6 +19,7 @@ const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
 const currencyConverterMap = {
     MNT: "mantle",
+    CRO: "cronos",
 };
 
 const currencyConverterCache: Record<
